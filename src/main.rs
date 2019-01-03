@@ -215,16 +215,100 @@ fn handle_s_type(bytes: &[u8]) -> Result<(), &str> {
     Ok(())
 }
 
-fn handle_sb_type(bytes: &[u8]) -> Result<(), &str> {
+fn handle_sb_type(bytes: &[u8], pc: &mut u32) -> Result<(), &'static str> {
     let opcode          = get_opcode(bytes);
-    let imm_4_to_1__11  = get_rd(bytes) as u32;
+    let imm_4_to_1_11  = get_rd(bytes) as u32;
     let f3              = get_f3(bytes);
     let rs1             = get_rs1(bytes) as usize;
     let rs2             = get_rs2(bytes) as usize;
-    let imm_12__10_to_5 = get_f7(bytes) as u32;
+    let imm_12_10_to_5 = get_f7(bytes) as u32;
 
-    let raw_immediate = 0x0 + ((imm_4_to_1__11 as u32) >> 1) << 1)) + (((imm_12__10_to_5 << 2) as u32) << 2) +
-        
+    let raw_immediate = 0x0 + (((imm_4_to_1_11 as u32) >> 1) << 1) + (((imm_12_10_to_5 << 2) as u32) << 2) +
+        ((((imm_4_to_1_11 << 7) >> 7) as u32) << 12) + (((imm_12_10_to_5 >> 6) as u32) << 13);
+    
+    let immediate = if raw_immediate >> 12 == 0x1 {
+        0xFF_FF_E0_00 + raw_immediate
+    } else {
+        raw_immediate
+    };
+
+    if opcode == 0x63 && f3 == 0x0 { // beq
+        if REGFILE[rs1 as usize] == REGFILE[rs2 as usize] {
+            *pc += immediate
+        }
+    }
+    else if opcode == 0x63 && f3 == 0x1 { // bne
+        if REGFILE[rs1 as usize] != REGFILE[rs2 as usize] {
+            *pc += immediate
+        }
+    }
+    else if opcode == 0x63 && f3 == 0x4 { // blt
+        if (REGFILE[rs1 as usize] as i32) < (REGFILE[rs2 as usize] as i32) {
+            *pc += immediate
+        }
+    }
+    else if opcode == 0x63 && f3 == 0x5 { // bge
+        if (REGFILE[rs1 as usize] as i32) < (REGFILE[rs2 as usize] as i32) {
+            *pc += immediate
+        }
+    }
+    else if opcode == 0x63 && f3 == 0x6 { //bltu 
+        if REGFILE[rs1 as usize] < REGFILE[rs2 as usize] {
+            *pc += immediate
+        }
+    }
+    else if opcode == 0x63 && f3 == 0x7 { //bgeu
+        if REGFILE[rs1 as usize] >= REGFILE[rs2 as usize] {
+            *pc += immediate
+        }
+    }
+    else {
+        return Err("Invalid SB-Type Instruction");
+    }
+
+    Ok(())
+}
+
+fn handle_u_type(bytes: &[u8], pc: &mut u32) -> Result<(), &'static str> {
+    let opcode = get_opcode(bytes);
+    let rd     = get_rd(bytes);
+
+    let immediate = (((bytes[1] as u32) >> 4) + ((bytes[2] as u32) << 4) + ((bytes[3] as u32) << 12)) << 12;
+
+    if opcode == 0x17 { // auipc
+        REGFILE[rd as usize] = ((*pc as i32) + (immediate as i32)) as u32;
+    }
+    else if opcode == 0x37 { // lui
+        REGFILE[rd as usize] = immediate;
+    }
+    else { 
+        return Err("Invalid U-Type Instruction");
+    }
+
+    Ok(())
+}
+
+fn handle_uj_type(bytes: &[u8], pc: &mut u32) -> Result<(), &'static str> {
+    let opcode = get_opcode(bytes);
+    let rd     = get_rd(bytes);
+
+    let raw_immediate = 0x0 + (((bytes[2] >> 5) << 1) as u32) + (((bytes[3] << 1) as u32) << 3) + 
+        ((((bytes[2] << 3) >> 7) as u32) << 11) + (((bytes[1] >> 4) as u32) << 12) +
+        (((bytes[2] << 4) as u32) << 12) + (((bytes[3] >> 7) as u32) << 20);
+
+    let immediate = if (raw_immediate >> 20) == 0x1 {
+        0xFF_E0_00_00 + raw_immediate
+    } else {
+        raw_immediate
+    };
+
+    if opcode == 0x6F { //jal 
+        REGFILE[rd as usize] = *pc + 4;
+        *pc = ((*pc as i32) + (immediate as i32)) as u32;
+    }
+    else {
+        return Err("Invalid UJ-Type Instruction")
+    }
 
     Ok(())
 }
