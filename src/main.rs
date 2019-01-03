@@ -2,48 +2,97 @@ use std::fs::File;
 use std::io::prelude::*;
 
 const IMEM_SIZE: usize = 2048;
-const IMEM: [u8; IMEM_SIZE] = [0; IMEM_SIZE];
-
 const REGFILE_SIZE: usize = 32;
-const REGFILE: [u32; REGFILE_SIZE] = [0; REGFILE_SIZE];
-
 const MEM_SIZE: usize = 1048576 * 4;
-const MEM: [u8; MEM_SIZE] = [0; MEM_SIZE];
 
+const INSTRUCTIONS: &'static str = "./risc-v/assembled/test.hex";
 
-fn load_into_imem(filepath: &str) -> std::io::Result<()> {
+fn load_into_imem(filepath: &str, imem: &mut [u8]) -> std::io::Result<usize> {
     let mut file = File::open(filepath)?;
     let mut instructions = String::new();
     file.read_to_string(&mut instructions)?;
 
+    let mut len = 0;
+
     for (i, c) in instructions.chars().enumerate() {
+
         let shift_bits = if i % 2 == 0 { 4 } else { 0 };
+        len = (i / 2) + 1;
+
         match c {
-            '0'       => IMEM[i] += 0x0 << shift_bits,
-            '1'       => IMEM[i] += 0x1 << shift_bits,
-            '2'       => IMEM[i] += 0x2 << shift_bits,
-            '3'       => IMEM[i] += 0x3 << shift_bits,
-            '4'       => IMEM[i] += 0x4 << shift_bits,
-            '5'       => IMEM[i] += 0x5 << shift_bits,
-            '6'       => IMEM[i] += 0x6 << shift_bits,
-            '7'       => IMEM[i] += 0x7 << shift_bits,
-            '8'       => IMEM[i] += 0x8 << shift_bits,
-            '9'       => IMEM[i] += 0x9 << shift_bits,
-            'A' | 'a' => IMEM[i] += 0xA << shift_bits,
-            'B' | 'b' => IMEM[i] += 0xB << shift_bits,
-            'C' | 'c' => IMEM[i] += 0xC << shift_bits,
-            'D' | 'd' => IMEM[i] += 0xD << shift_bits,
-            'E' | 'e' => IMEM[i] += 0xE << shift_bits,
-            'F' | 'f' => IMEM[i] += 0xF << shift_bits,
-            _         => {
+            '0' => { 
+                imem[i / 2] += 0x0 << shift_bits;
+                println!("{}:{}:{}", c, i, imem[i]); 
+            }
+            '1' => { 
+                imem[i / 2] += 0x1 << shift_bits;
+                println!("{}:{}:{}", c, i, imem[i]); 
+            }
+            '2' => { 
+                imem[i / 2] += 0x2 << shift_bits;
+                println!("{}:{}:{}", c, i, imem[i]); 
+            }
+            '3' => { 
+                imem[i / 2] += 0x3 << shift_bits;
+                println!("{}:{}:{}", c, i, imem[i]); 
+            }
+            '4' => { 
+                imem[i / 2] += 0x4 << shift_bits ;
+                println!("{}:{}:{}", c, i, imem[i]);
+            }
+            '5' => { 
+                imem[i / 2] += 0x5 << shift_bits;
+                println!("{}:{}:{}", c, i, imem[i]); 
+            }
+            '6' => { 
+                imem[i / 2] += 0x6 << shift_bits ;
+                println!("{}:{}:{}", c, i, imem[i]);
+            }
+            '7' => { 
+                imem[i / 2] += 0x7 << shift_bits;
+                println!("{}:{}:{}", c, i, imem[i]); 
+            }
+            '8' => { 
+                imem[i / 2] += 0x8 << shift_bits;
+                println!("{}:{}:{}", c, i, imem[i]); 
+            }
+            '9' => { 
+                imem[i / 2] += 0x9 << shift_bits;
+                println!("{}:{}:{}", c, i, imem[i]); 
+            }
+            'A' | 'a' => { 
+                imem[i / 2] += 0xA << shift_bits;
+                println!("{}:{}:{}", c, i, imem[i]); 
+            }
+            'B' | 'b' => { 
+                imem[i / 2] += 0xB << shift_bits ;
+                println!("{}:{}:{}", c, i, imem[i]);
+            }
+            'C' | 'c' => { 
+                imem[i / 2] += 0xC << shift_bits;
+                println!("{}:{}:{}", c, i, imem[i]); 
+            }
+            'D' | 'd' => { 
+                imem[i / 2] += 0xD << shift_bits ;
+                println!("{}:{}:{}", c, i, imem[i]);
+            }
+            'E' | 'e' => { 
+                imem[i / 2] += 0xE << shift_bits;
+                println!("{}:{}:{}", c, i, imem[i]); 
+            }
+            'F' | 'f' => { 
+                imem[i / 2] += 0xF << shift_bits ;
+                println!("{}:{}:{}", c, i, imem[i]);
+            }
+            _         => { 
                 return Err(std::io::Error::from(std::io::ErrorKind::InvalidInput));
             }
         }
     }
-    Ok(())
+    Ok(len)
 }
 
-fn handle_r_type(bytes: &[u8]) -> Result<(), &str> {
+fn handle_r_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32) -> Result<(), &'static str> {
     
     let opcode = get_opcode(bytes);
     let rd     = get_rd(bytes) as usize;
@@ -53,34 +102,44 @@ fn handle_r_type(bytes: &[u8]) -> Result<(), &str> {
     let f7     = get_f7(bytes) as u32;
 
     if opcode == 0x33 && f3 == 0x0 && f7 == 0x0 { // add
-        REGFILE[rd] = REGFILE[rs1] + REGFILE[rs2];
+        regfile[rd] = regfile[rs1] + regfile[rs2];
+        *pc += 4;
     }
     else if opcode == 0x33 && f3 == 0x0 && f7 == 0x20 { // sub
-        REGFILE[rd] = REGFILE[rs1] - REGFILE[rs2];
+        regfile[rd] = regfile[rs1] - regfile[rs2];
+        *pc += 4;
     }
     else if opcode == 0x33 && f3 == 0x1 && f7 == 0x00 { // sll
-        REGFILE[rd] = REGFILE[rs1] << REGFILE[rs2];
+        regfile[rd] = regfile[rs1] << regfile[rs2];
+        *pc += 4;
     }
     else if opcode == 0x33 && f3 == 0x2 && f7 == 0x00 { // slt
-        REGFILE[rd] = if (REGFILE[rs1] as i32) < (REGFILE[rs2] as i32) { 1 } else { 0 }; 
+        regfile[rd] = if (regfile[rs1] as i32) < (regfile[rs2] as i32) { 1 } else { 0 }; 
+        *pc += 4;
     }
     else if opcode == 0x33 && f3 == 0x3 && f7 == 0x00 { // sltu
-        REGFILE[rd] = if REGFILE[rs1] < REGFILE[rs2] { 1 } else { 0 };
+        regfile[rd] = if regfile[rs1] < regfile[rs2] { 1 } else { 0 };
+        *pc += 4;
     }
     else if opcode == 0x33 && f3 == 0x4 && f7 == 0x00 { // xor
-        REGFILE[rd] = REGFILE[rs1] ^ REGFILE[rs2];
+        regfile[rd] = regfile[rs1] ^ regfile[rs2];
+        *pc += 4;
     }
     else if opcode == 0x33 && f3 == 0x5 && f7 == 0x00 { // srl
-        REGFILE[rd] = REGFILE[rs1] >> REGFILE[rs2];
+        regfile[rd] = regfile[rs1] >> regfile[rs2];
+        *pc += 4;
     }
     else if opcode == 0x33 && f3 == 0x5 && f7 == 0x20 { // sra
-        REGFILE[rd] = ((REGFILE[rs1] as i32) >> (REGFILE[rs2] as i32)) as u32;
+        regfile[rd] = ((regfile[rs1] as i32) >> (regfile[rs2] as i32)) as u32;
+        *pc += 4;
     }
     else if opcode == 0x33 && f3 == 0x6 && f7 == 0x00 { // or
-        REGFILE[rd] = REGFILE[rs1] | REGFILE[rs2];
+        regfile[rd] = regfile[rs1] | regfile[rs2];
+        *pc += 4;
     }
     else if opcode == 0x33 && f3 == 0x7 && f7 == 0x00 { // and
-        REGFILE[rd] = REGFILE[rs1] & REGFILE[rs2];
+        regfile[rd] = regfile[rs1] & regfile[rs2];
+        *pc += 4;
     }
     else {
         return Err("Invalid R-Type Instruction");
@@ -89,7 +148,7 @@ fn handle_r_type(bytes: &[u8]) -> Result<(), &str> {
     Ok(())
 }
 
-fn handle_i_type(bytes: &[u8]) -> Result<(), &str> {
+fn handle_i_type(regfile: &mut [u32], mem: &mut [u8], bytes: &[u8], pc: &mut u32) -> Result<(), &'static str> {
 
     let opcode = get_opcode(bytes);
     let rd     = get_rd(bytes) as usize;
@@ -105,64 +164,78 @@ fn handle_i_type(bytes: &[u8]) -> Result<(), &str> {
     };
 
     if opcode == 0x3 && f3 == 0x0 { //lb
-        let byte: u32 = MEM[((REGFILE[rs1] as i32) + (immediate as i32)) as usize] as u32;
-        REGFILE[rd] = if byte >> 7 == 0x1 {
+        let byte: u32 = mem[((regfile[rs1] as i32) + (immediate as i32)) as usize] as u32;
+        regfile[rd] = if byte >> 7 == 0x1 {
             0xFF_FF_FF_00 + byte
         } else {
            byte
         }; 
+        *pc += 4;
     }
     else if opcode == 0x3 && f3 == 0x1 { //lh
-        let bottom = MEM[((REGFILE[rs1] as i32) + (immediate as i32)) as usize] as u32;
-        let top = MEM[((REGFILE[rs1] as i32) + (immediate as i32) + 1) as usize] as u32;
+        let bottom = mem[((regfile[rs1] as i32) + (immediate as i32)) as usize] as u32;
+        let top = mem[((regfile[rs1] as i32) + (immediate as i32) + 1) as usize] as u32;
         let total = bottom + (top << 8);
-        REGFILE[rd] = if top >> 7 == 0x1 {
+        regfile[rd] = if top >> 7 == 0x1 {
             0xFF_FF_00_00 + total 
         } else {
             total
         };
+        *pc += 4;
     }
     else if opcode == 0x3 && f3 == 0x2 { //lw
-        let bottom = MEM[((REGFILE[rs1] as i32) + (immediate as i32)) as usize] as u32;
-        let low_mid = MEM[((REGFILE[rs1] as i32) + (immediate as i32) + 1) as usize] as u32;
-        let high_mid = MEM[((REGFILE[rs1] as i32) + (immediate as i32) + 2) as usize] as u32;
-        let top = MEM[((REGFILE[rs1] as i32) + (immediate as i32) + 3) as usize] as u32;
-        REGFILE[rd] = bottom + (low_mid << 8) + (high_mid << 16) + (top << 24);
+        let bottom = mem[((regfile[rs1] as i32) + (immediate as i32)) as usize] as u32;
+        let low_mid = mem[((regfile[rs1] as i32) + (immediate as i32) + 1) as usize] as u32;
+        let high_mid = mem[((regfile[rs1] as i32) + (immediate as i32) + 2) as usize] as u32;
+        let top = mem[((regfile[rs1] as i32) + (immediate as i32) + 3) as usize] as u32;
+        regfile[rd] = bottom + (low_mid << 8) + (high_mid << 16) + (top << 24);
+        *pc += 4;
     }
     else if opcode == 0x3 && f3 == 0x4 { //lbu
-        REGFILE[rd] = MEM[((REGFILE[rs1] as i32) + (immediate as i32)) as usize] as u32;
+        regfile[rd] = mem[((regfile[rs1] as i32) + (immediate as i32)) as usize] as u32;
+        *pc += 4;
     }
     else if opcode == 0x3 && f3 == 0x5 { //lhu
-        let bottom = MEM[((REGFILE[rs1] as i32) + (immediate as i32)) as usize] as u32;
-        let top = MEM[((REGFILE[rs1] as i32) + (immediate as i32) + 1) as usize] as u32;
-        REGFILE[rd] = bottom + (top << 8);
+        let bottom = mem[((regfile[rs1] as i32) + (immediate as i32)) as usize] as u32;
+        let top = mem[((regfile[rs1] as i32) + (immediate as i32) + 1) as usize] as u32;
+        regfile[rd] = bottom + (top << 8);
+        *pc += 4;
     }
     else if opcode == 0x13 && f3 == 0x0 { //addi
-        REGFILE[rd] = REGFILE[rs1] + immediate;
+        regfile[rd] = regfile[rs1] + immediate;
+        *pc += 4;
     }
     else if opcode == 0x13 && f3 == 0x1 && f7 == 0x0 { //slli
-        REGFILE[rd] = REGFILE[rs1] << immediate;
+        regfile[rd] = regfile[rs1] << immediate;
+        *pc += 4;
     }
     else if opcode == 0x13 && f3 == 0x2 { //slti
-        REGFILE[rd] = if (REGFILE[rs1] as i32) < (immediate as i32) { 1 } else { 0 };
+        regfile[rd] = if (regfile[rs1] as i32) < (immediate as i32) { 1 } else { 0 };
+        *pc += 4;
     }
     else if opcode == 0x13 && f3 == 0x3 { //sltiu
-        REGFILE[rd] = if REGFILE[rs1] < immediate { 1 } else { 0 };
+        regfile[rd] = if regfile[rs1] < immediate { 1 } else { 0 };
+        *pc += 4;
     }
     else if opcode == 0x13 && f3 == 0x4 { //xori
-        REGFILE[rd] = REGFILE[rs1] ^ immediate;
+        regfile[rd] = regfile[rs1] ^ immediate;
+        *pc += 4;
     }
     else if opcode == 0x13 && f3 == 0x5 && f7 == 0x0 { //srli
-        REGFILE[rd] = REGFILE[rs1] >> raw_immediate; 
+        regfile[rd] = regfile[rs1] >> raw_immediate; 
+        *pc += 4;
     }
     else if opcode == 0x13 && f3 == 0x5 && f7 == 0x20 { //srai
-        REGFILE[rd] = ((REGFILE[rs1] as i32) >> (immediate as i32)) as u32;
+        regfile[rd] = ((regfile[rs1] as i32) >> (immediate as i32)) as u32;
+        *pc += 4;
     }
     else if opcode == 0x13 && f3 == 0x6 { //ori
-        REGFILE[rd] = REGFILE[rs1] | immediate;
+        regfile[rd] = regfile[rs1] | immediate;
+        *pc += 4;
     }
     else if opcode == 0x13 && f3 == 0x7 { //andi
-        REGFILE[rd] = REGFILE[rs1] & immediate;
+        regfile[rd] = regfile[rs1] & immediate;
+        *pc += 4;
     }
     else {
         return Err("Invalid I-Type Instruction")
@@ -171,7 +244,7 @@ fn handle_i_type(bytes: &[u8]) -> Result<(), &str> {
     Ok(())
 }
 
-fn handle_s_type(bytes: &[u8]) -> Result<(), &str> {
+fn handle_s_type(regfile: &mut [u32], mem: &mut [u8], bytes: &[u8], pc: &mut u32) -> Result<(), &'static str> {
     
     let opcode   = get_opcode(bytes);
     let imm_4_0  = get_rd(bytes) as u32;
@@ -188,25 +261,31 @@ fn handle_s_type(bytes: &[u8]) -> Result<(), &str> {
     };
 
     if opcode == 0x23 && f3 == 0x0 { //sb
-        MEM[((REGFILE[rs1] as i32) + (immediate as i32)) as usize] = REGFILE[rs2] as u8;
+        mem[((regfile[rs1] as i32) + (immediate as i32)) as usize] = regfile[rs2] as u8;
+
+        *pc += 4;
     }
     else if opcode == 0x23 && f3 == 0x1 { //sh
-        let word = REGFILE[rs2] as u32;
+        let word = regfile[rs2] as u32;
         let bottom = word as u8;
         let top = (word >> 8) as u8;
-        MEM[((REGFILE[rs1] as i32) + (immediate as i32)) as usize] = bottom;
-        MEM[((REGFILE[rs1] as i32) + (immediate as i32) + 1) as usize] = top;
+        mem[((regfile[rs1] as i32) + (immediate as i32)) as usize] = bottom;
+        mem[((regfile[rs1] as i32) + (immediate as i32) + 1) as usize] = top;
+
+        *pc += 4;
     }
     else if opcode == 0x23 && f3 == 0x2 { //sw
-        let word = REGFILE[rs2] as u32;
+        let word = regfile[rs2] as u32;
         let bottom = word as u8;
         let low_mid = (word >> 8) as u8;
         let high_mid = (word >> 16) as u8;
         let top = (word >> 24) as u8;
-        MEM[((REGFILE[rs1] as i32) + (immediate as i32))     as usize] = bottom;
-        MEM[((REGFILE[rs1] as i32) + (immediate as i32) + 1) as usize] = low_mid;
-        MEM[((REGFILE[rs1] as i32) + (immediate as i32) + 2) as usize] = high_mid;
-        MEM[((REGFILE[rs1] as i32) + (immediate as i32) + 3) as usize] = top;
+        mem[((regfile[rs1] as i32) + (immediate as i32))     as usize] = bottom;
+        mem[((regfile[rs1] as i32) + (immediate as i32) + 1) as usize] = low_mid;
+        mem[((regfile[rs1] as i32) + (immediate as i32) + 2) as usize] = high_mid;
+        mem[((regfile[rs1] as i32) + (immediate as i32) + 3) as usize] = top;
+
+        *pc += 4;
     }
     else { 
         return Err("Invalid S-Type Instruction");
@@ -215,7 +294,7 @@ fn handle_s_type(bytes: &[u8]) -> Result<(), &str> {
     Ok(())
 }
 
-fn handle_sb_type(bytes: &[u8], pc: &mut u32) -> Result<(), &'static str> {
+fn handle_sb_type(regfile: &mut[u32], bytes: &[u8], pc: &mut u32) -> Result<(), &'static str> {
     let opcode          = get_opcode(bytes);
     let imm_4_to_1_11  = get_rd(bytes) as u32;
     let f3              = get_f3(bytes);
@@ -233,33 +312,45 @@ fn handle_sb_type(bytes: &[u8], pc: &mut u32) -> Result<(), &'static str> {
     };
 
     if opcode == 0x63 && f3 == 0x0 { // beq
-        if REGFILE[rs1 as usize] == REGFILE[rs2 as usize] {
+        if regfile[rs1 as usize] == regfile[rs2 as usize] {
             *pc += immediate
+        } else {
+            *pc += 4;
         }
     }
     else if opcode == 0x63 && f3 == 0x1 { // bne
-        if REGFILE[rs1 as usize] != REGFILE[rs2 as usize] {
+        if regfile[rs1 as usize] != regfile[rs2 as usize] {
             *pc += immediate
+        } else {
+            *pc += 4;
         }
     }
     else if opcode == 0x63 && f3 == 0x4 { // blt
-        if (REGFILE[rs1 as usize] as i32) < (REGFILE[rs2 as usize] as i32) {
+        if (regfile[rs1 as usize] as i32) < (regfile[rs2 as usize] as i32) {
             *pc += immediate
+        } else {
+            *pc += 4;
         }
     }
     else if opcode == 0x63 && f3 == 0x5 { // bge
-        if (REGFILE[rs1 as usize] as i32) < (REGFILE[rs2 as usize] as i32) {
+        if (regfile[rs1 as usize] as i32) < (regfile[rs2 as usize] as i32) {
             *pc += immediate
+        } else {
+            *pc += 4;
         }
     }
     else if opcode == 0x63 && f3 == 0x6 { //bltu 
-        if REGFILE[rs1 as usize] < REGFILE[rs2 as usize] {
+        if regfile[rs1 as usize] < regfile[rs2 as usize] {
             *pc += immediate
+        } else {
+            *pc += 4;
         }
     }
     else if opcode == 0x63 && f3 == 0x7 { //bgeu
-        if REGFILE[rs1 as usize] >= REGFILE[rs2 as usize] {
+        if regfile[rs1 as usize] >= regfile[rs2 as usize] {
             *pc += immediate
+        } else {
+            *pc += 4;
         }
     }
     else {
@@ -269,17 +360,19 @@ fn handle_sb_type(bytes: &[u8], pc: &mut u32) -> Result<(), &'static str> {
     Ok(())
 }
 
-fn handle_u_type(bytes: &[u8], pc: &mut u32) -> Result<(), &'static str> {
+fn handle_u_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32) -> Result<(), &'static str> {
     let opcode = get_opcode(bytes);
     let rd     = get_rd(bytes);
 
     let immediate = (((bytes[1] as u32) >> 4) + ((bytes[2] as u32) << 4) + ((bytes[3] as u32) << 12)) << 12;
 
     if opcode == 0x17 { // auipc
-        REGFILE[rd as usize] = ((*pc as i32) + (immediate as i32)) as u32;
+        regfile[rd as usize] = ((*pc as i32) + (immediate as i32)) as u32;
+        *pc += 4;
     }
     else if opcode == 0x37 { // lui
-        REGFILE[rd as usize] = immediate;
+        regfile[rd as usize] = immediate;
+        *pc += 4;
     }
     else { 
         return Err("Invalid U-Type Instruction");
@@ -288,7 +381,7 @@ fn handle_u_type(bytes: &[u8], pc: &mut u32) -> Result<(), &'static str> {
     Ok(())
 }
 
-fn handle_uj_type(bytes: &[u8], pc: &mut u32) -> Result<(), &'static str> {
+fn handle_uj_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32) -> Result<(), &'static str> {
     let opcode = get_opcode(bytes);
     let rd     = get_rd(bytes);
 
@@ -303,7 +396,7 @@ fn handle_uj_type(bytes: &[u8], pc: &mut u32) -> Result<(), &'static str> {
     };
 
     if opcode == 0x6F { //jal 
-        REGFILE[rd as usize] = *pc + 4;
+        regfile[rd as usize] = *pc + 4;
         *pc = ((*pc as i32) + (immediate as i32)) as u32;
     }
     else {
@@ -325,6 +418,58 @@ fn get_rs2(bytes: &[u8]) -> u8 { ((bytes[3] << 7) >> 3) + (bytes[2] >> 4) }
 
 fn get_f7(bytes: &[u8]) -> u8 { bytes[3] >> 1 }
 
+fn print_registers(regfile: &mut [u32]) {
+    for (i, r) in regfile.into_iter().enumerate() {
+        if *r != 0 {
+            println!("x{}: {}", i, *r as i32);
+        }
+    }
+}
+
 fn main() {
-    println!("Hello, world!");
+    
+    let mut imem: [u8; IMEM_SIZE] = [0; IMEM_SIZE];
+    let mut regfile: [u32; REGFILE_SIZE] = [0; REGFILE_SIZE];
+    let mut mem: [u8; MEM_SIZE] = [0; MEM_SIZE];
+
+    let length = load_into_imem(INSTRUCTIONS, &mut imem).unwrap();
+    println!("{}", length);
+    
+    let mut pc: u32 = 0;
+    while pc < (length as u32) {
+        
+        let mut bytes: [u8;4] = [0;4]; 
+        for i in 0..4 {
+            bytes[i] = imem[(pc + 3 - (i as u32)) as usize]
+        }
+
+        match get_opcode(&bytes) {
+            0x3 | 0x13 | 0x1B | 0x67 | 0x73 => { 
+                handle_i_type(&mut regfile, &mut mem, &bytes, &mut pc).unwrap(); 
+            }
+            0x17 | 0x37 => { 
+                handle_u_type(&mut regfile, &bytes, &mut pc).unwrap();
+            }
+            0x23 => { 
+                handle_s_type(&mut regfile, &mut mem, &bytes, &mut pc).unwrap(); 
+            }
+            0x33 | 0x3B => { 
+                handle_r_type(&mut regfile, &bytes, &mut pc).unwrap(); 
+            }
+            0x63 => { 
+                handle_sb_type(&mut regfile, &bytes, &mut pc).unwrap(); 
+            }
+            0x6F => { 
+                handle_uj_type(&mut regfile, &bytes, &mut pc).unwrap(); 
+            }
+            _ => {
+                break;
+            }
+        }
+        
+        regfile[0] = 0;
+        print_registers(&mut regfile);
+
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+    }
 }
