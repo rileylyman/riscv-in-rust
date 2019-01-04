@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::prelude::*;
+use std::num::ParseIntError;
 
 const IMEM_SIZE: usize = 2048;
 const REGFILE_SIZE: usize = 32;
@@ -7,90 +8,49 @@ const MEM_SIZE: usize = 1048576 * 4;
 
 const INSTRUCTIONS: &'static str = "./risc-v/assembled/test.hex";
 
-fn load_into_imem(filepath: &str, imem: &mut [u8]) -> std::io::Result<usize> {
-    let mut file = File::open(filepath)?;
-    let mut instructions = String::new();
-    file.read_to_string(&mut instructions)?;
-
-    let mut len = 0;
-
-    for (i, c) in instructions.chars().enumerate() {
-
-        let shift_bits = if i % 2 == 0 { 4 } else { 0 };
-        len = (i / 2) + 1;
-
-        match c {
-            '\n' | ' ' => {}
-            '0' => { 
-                imem[i / 2] += 0x0 << shift_bits;
-                println!("{}:{}:{}", c, i, imem[i]); 
-            }
-            '1' => { 
-                imem[i / 2] += 0x1 << shift_bits;
-                println!("{}:{}:{}", c, i, imem[i]); 
-            }
-            '2' => { 
-                imem[i / 2] += 0x2 << shift_bits;
-                println!("{}:{}:{}", c, i, imem[i]); 
-            }
-            '3' => { 
-                imem[i / 2] += 0x3 << shift_bits;
-                println!("{}:{}:{}", c, i, imem[i]); 
-            }
-            '4' => { 
-                imem[i / 2] += 0x4 << shift_bits ;
-                println!("{}:{}:{}", c, i, imem[i]);
-            }
-            '5' => { 
-                imem[i / 2] += 0x5 << shift_bits;
-                println!("{}:{}:{}", c, i, imem[i]); 
-            }
-            '6' => { 
-                imem[i / 2] += 0x6 << shift_bits ;
-                println!("{}:{}:{}", c, i, imem[i]);
-            }
-            '7' => { 
-                imem[i / 2] += 0x7 << shift_bits;
-                println!("{}:{}:{}", c, i, imem[i]); 
-            }
-            '8' => { 
-                imem[i / 2] += 0x8 << shift_bits;
-                println!("{}:{}:{}", c, i, imem[i]); 
-            }
-            '9' => { 
-                imem[i / 2] += 0x9 << shift_bits;
-                println!("{}:{}:{}", c, i, imem[i]); 
-            }
-            'A' | 'a' => { 
-                imem[i / 2] += 0xA << shift_bits;
-                println!("{}:{}:{}", c, i, imem[i]); 
-            }
-            'B' | 'b' => { 
-                imem[i / 2] += 0xB << shift_bits ;
-                println!("{}:{}:{}", c, i, imem[i]);
-            }
-            'C' | 'c' => { 
-                imem[i / 2] += 0xC << shift_bits;
-                println!("{}:{}:{}", c, i, imem[i]); 
-            }
-            'D' | 'd' => { 
-                imem[i / 2] += 0xD << shift_bits ;
-                println!("{}:{}:{}", c, i, imem[i]);
-            }
-            'E' | 'e' => { 
-                imem[i / 2] += 0xE << shift_bits;
-                println!("{}:{}:{}", c, i, imem[i]); 
-            }
-            'F' | 'f' => { 
-                imem[i / 2] += 0xF << shift_bits ;
-                println!("{}:{}:{}", c, i, imem[i]);
-            }
-            _         => { 
-                return Err(std::io::Error::from(std::io::ErrorKind::InvalidInput));
-            }
+// Decode an even length hex string into its constituent bytes
+// Code adapted from StackOverflow user `Sven Marnach`
+fn decode_hex_to_bytes(hex: &str) -> Result<Vec<u8>, ParseIntError> {
+    (0..hex.len()).step_by(2).map(
+        |k| {
+            u8::from_str_radix(&hex[k..k + 2], 16)
         }
+    ).collect()
+}
+
+fn load_into_imem(filepath: &str, imem: &mut [u8]) -> Result<(), &'static str> {
+    let mut file = File::open(filepath).or_else(|_| return Err("Could not open instruction file")).unwrap();
+    let mut instructions = String::new();
+    file.read_to_string(&mut instructions).or_else(|_| return Err("Error reading file")).unwrap();
+
+    let mut index = 0;
+    for hex_str in instructions.split(|c: char| !c.is_digit(16)) {
+
+        let bytes = decode_hex_to_bytes(hex_str).expect("Could not decode instruction to bytes");
+
+        match get_bits(bytes[bytes.len() - 1]) {
+            16 => { return Err("16-bit instructions not supported"); } // 16 bit instruction
+            32 => { // 32 bit instruction
+
+                if bytes.len() == 4 {
+                    imem[index] = bytes[3];
+                    imem[index + 1] = bytes[2];
+                    imem[index + 2] = bytes[1];
+                    imem[index + 3] = bytes[0];
+                }
+                else { return Err("32-bit instruction does not contain 4 bytes, but more or less"); }
+
+                index += 4;
+
+            } 
+            48 => { return Err("48-bit instructions not supported"); } // 48 bit instruction
+            64 => { return Err("64-bit instructions not supported"); } // 64 bit instruction
+            _  => { return Err(">=80-bit instructions not supported"); } // >= 80 bit instruction
+        }
+
     }
-    Ok(len)
+    
+    Ok(())
 }
 
 fn handle_r_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32) -> Result<(), &'static str> {
@@ -446,44 +406,53 @@ fn print_registers(regfile: &mut [u32]) {
     }
 }
 
+fn get_bits(first_byte: u8) -> i32 {
+    match first_byte {
+        b@_ if b & 0x03 <  0x03 => 16, // 16 bit instruction
+        b@_ if b & 0x1F <  0x1F => 32, // 32 bit instruction
+        b@_ if b & 0x3F == 0x1F => 48, // 48 bit instruction
+        b@_ if b & 0x7F == 0x3F => 64, // 64 bit instruction
+        _ => -1, // >= 80 bit instruction
+    }
+}
+
 fn main() {
     
     let mut imem: [u8; IMEM_SIZE] = [0; IMEM_SIZE];
     let mut regfile: [u32; REGFILE_SIZE] = [0; REGFILE_SIZE];
     let mut mem: [u8; MEM_SIZE] = [0; MEM_SIZE];
 
-    let length = load_into_imem(INSTRUCTIONS, &mut imem).unwrap();
-    println!("{}", length);
+    load_into_imem(INSTRUCTIONS, &mut imem).unwrap();
     
     let mut pc: u32 = 0;
     loop {
         
-        let mut bytes: [u8;4] = [0;4]; 
-        for i in 0..4 {
-            bytes[i] = imem[(pc + 3 - (i as u32)) as usize]
-        }
+        let bytes = match get_bits(imem[pc as usize]) {
+            32 => &imem[(pc as usize)..(pc as usize) + 4],
+            _ => panic!("Only 32 bit instructions are supported")
+        };
 
-        match get_opcode(&bytes) {
+        match get_opcode(bytes) {
             0x3 | 0x13 | 0x1B | 0x67 | 0x73 => { 
-                handle_i_type(&mut regfile, &mut mem, &bytes, &mut pc).unwrap(); 
+                handle_i_type(&mut regfile, &mut mem, bytes, &mut pc).unwrap(); 
             }
             0x17 | 0x37 => { 
-                handle_u_type(&mut regfile, &bytes, &mut pc).unwrap();
+                handle_u_type(&mut regfile, bytes, &mut pc).unwrap();
             }
             0x23 => { 
-                handle_s_type(&mut regfile, &mut mem, &bytes, &mut pc).unwrap(); 
+                handle_s_type(&mut regfile, &mut mem, bytes, &mut pc).unwrap(); 
             }
             0x33 | 0x3B => { 
-                handle_r_type(&mut regfile, &bytes, &mut pc).unwrap(); 
+                handle_r_type(&mut regfile, bytes, &mut pc).unwrap(); 
             }
             0x63 => { 
-                handle_sb_type(&mut regfile, &bytes, &mut pc).unwrap(); 
+                handle_sb_type(&mut regfile, bytes, &mut pc).unwrap(); 
             }
             0x6F => { 
-                handle_uj_type(&mut regfile, &bytes, &mut pc).unwrap(); 
+                handle_uj_type(&mut regfile, bytes, &mut pc).unwrap(); 
             }
             _ => {
-                println!("UNRECOGNIZED OPCODE: {}", get_opcode(&bytes));
+                println!("UNRECOGNIZED OPCODE: {}", get_opcode(bytes));
                 println!("{:?}", bytes);
                 break;
             }
