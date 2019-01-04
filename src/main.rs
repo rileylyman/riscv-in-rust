@@ -20,6 +20,7 @@ fn load_into_imem(filepath: &str, imem: &mut [u8]) -> std::io::Result<usize> {
         len = (i / 2) + 1;
 
         match c {
+            '\n' | ' ' => {}
             '0' => { 
                 imem[i / 2] += 0x0 << shift_bits;
                 println!("{}:{}:{}", c, i, imem[i]); 
@@ -237,8 +238,27 @@ fn handle_i_type(regfile: &mut [u32], mem: &mut [u8], bytes: &[u8], pc: &mut u32
         regfile[rd] = regfile[rs1] & immediate;
         *pc += 4;
     }
+    else if opcode == 0x67 && f3 == 0x0 { // jalr
+        regfile[rd] = *pc + 4;
+        *pc = regfile[rs1] + immediate;
+    }
+    else if opcode == 0x73 && f3 == 0x0 && f7 == 0x0 { //ecall
+        match regfile[10] {
+            0x1 => {
+                println!("PRINT ECALL: {}", regfile[11]);
+            }
+            0xA => {
+                println!("TERMINATE ECALL");
+                return Err("Program terminated");
+            }
+            _ => {}
+        } 
+    }
+    else if opcode == 0x73 && f3 == 0x0 && f7 == 0x1 { //ebreak
+        return Err("ebreak: unimplemented instruction");
+    }
     else {
-        return Err("Invalid I-Type Instruction")
+        return Err("Invalid I-Type Instruction");
     }
 
     Ok(())
@@ -436,7 +456,7 @@ fn main() {
     println!("{}", length);
     
     let mut pc: u32 = 0;
-    while pc < (length as u32) {
+    loop {
         
         let mut bytes: [u8;4] = [0;4]; 
         for i in 0..4 {
@@ -463,6 +483,8 @@ fn main() {
                 handle_uj_type(&mut regfile, &bytes, &mut pc).unwrap(); 
             }
             _ => {
+                println!("UNRECOGNIZED OPCODE: {}", get_opcode(&bytes));
+                println!("{:?}", bytes);
                 break;
             }
         }
