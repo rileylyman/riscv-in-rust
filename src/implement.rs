@@ -1,7 +1,11 @@
-#[allow(overflowing_literals)]
+#![allow(overflowing_literals)]
 
 use super::decode::*;
 use super::*;
+
+fn mulh(first: u32, second: u32, weight: i64) -> u32 {
+    (((first as i64) * (second as i64) * weight) >> 32) as u32
+}
 
 pub fn handle_r_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32) -> Result<(), &'static str> {
     
@@ -50,6 +54,86 @@ pub fn handle_r_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32) -> Result<
     }
     else if opcode == 0x33 && f3 == 0x7 && f7 == 0x00 { // and
         regfile[rd] = regfile[rs1] & regfile[rs2];
+        *pc += 4;
+    }
+    else if opcode == 0x33 && f3 == 0x0 && f7 == 0x1 { //mul
+        regfile[rd] = ((regfile[rs1] as u64) * (regfile[rs2] as u64)) as u32;
+        *pc += 4;
+    }
+    else if opcode == 0x33 && f3 == 0x1 && f7 == 0x1 { //mulh
+        let mut first = regfile[rs1];
+        let mut second = regfile[rs2];
+        
+        let mut weight = 1;
+        if (first as i32) < 0 { 
+            first = ((first as i32) * -1) as u32; 
+            weight *= -1; 
+        }
+        if (second as i32) < 0 { 
+            second = ((second as i32) * -1) as u32; 
+            weight *= -1; 
+        }
+         
+        regfile[rd] = mulh(first, second, weight);
+        *pc += 4;
+    }
+    else if opcode == 0x33 && f3 == 0x2 && f7 == 0x1 { //mulhsu
+        let mut first = regfile[rs1];
+        let second = regfile[rs2];
+        
+        let mut weight = 1;
+        if (first as i32) < 0 { 
+            first = ((first as i32) * -1) as u32; 
+            weight *= -1; 
+        }
+         
+        regfile[rd] = mulh(first, second, weight);
+        *pc += 4;
+    }
+    else if opcode == 0x33 && f3 == 0x3 && f7 == 0x1 { //mulhu
+        regfile[rd] = (((regfile[rs1] as u64) * (regfile[rs2] as u64)) >> 32) as u32;
+        *pc += 4;
+    }
+    else if opcode == 0x33 && f3 == 0x4 && f7 == 0x1 { //div
+        if regfile[rs2] == 0 {
+            regfile[rd] = 0xFF_FF_FF_FF;
+        }
+        else if (regfile[rs1] as i32) == -0x80000000 && (regfile[rs2] as i32) == -0x1 {
+            regfile[rd] = regfile[rs1];
+        }
+        else {
+            regfile[rd] = ((regfile[rs1] as i32) / (regfile[rs2] as i32)) as u32;
+        }
+        *pc += 4;
+    }
+    else if opcode == 0x33 && f3 == 0x5 && f7 == 0x1 { //divu
+        if regfile[rs2] == 0 {
+            regfile[rd] = 0xFF_FF_FF_FF;
+        }
+        else {
+            regfile[rd] = regfile[rs1] / regfile[rs2];
+        }
+        *pc += 4;
+    }
+    else if opcode == 0x33 && f3 == 0x6 && f7 == 0x1 { //rem
+        if regfile[rs2] == 0 {
+            regfile[rd] = regfile[rs1];
+        }
+        else if (regfile[rs1] as i32) == -0x80000000 && (regfile[rs2] as i32) == -0x1 {
+            regfile[rd] = 0;
+        }
+        else {
+            regfile[rd] = ((regfile[rs1] as i32) % (regfile[rs2] as i32)) as u32;
+        }
+        *pc += 4;
+    }
+    else if opcode == 0x33 && f3 == 0x7 && f7 == 0x1 { //remu
+        if regfile[rs2] == 0 {
+            regfile[rd] = regfile[rs1];
+        }
+        else {
+            regfile[rd] = regfile[rs1] % regfile[rs2];
+        }
         *pc += 4;
     }
     else {
@@ -128,7 +212,7 @@ pub fn handle_i_type(regfile: &mut [u32], mem: &mut [u8], bytes: &[u8], pc: &mut
         *pc += 4;
     }
     else if opcode == 0x13 && f3 == 0x5 && f7 == 0x0 { //srli
-        regfile[rd] = regfile[rs1] >> immediate; 
+        regfile[rd] = regfile[rs1] >> (immediate as u32); 
         *pc += 4;
     }
     else if opcode == 0x13 && f3 == 0x5 && f7 == 0x20 { //srai
@@ -144,8 +228,12 @@ pub fn handle_i_type(regfile: &mut [u32], mem: &mut [u8], bytes: &[u8], pc: &mut
         *pc += 4;
     }
     else if opcode == 0x67 && f3 == 0x0 { // jalr
+        let destination = ((regfile[rs1] as i32) + immediate) & 0xFF_FF_FF_FE;
+        if destination % INSTRUCTION_ADDRESS_MISALIGNED_THRESHOLD != 0 {
+            return Err("Instruction address misaligned exception");
+        }
         regfile[rd] = *pc + 4;
-        *pc = ((regfile[rs1] as i32) + immediate) as u32;
+        *pc = destination as u32;
     }
     else if opcode == 0x73 && f3 == 0x0 && f7 == 0x0 { //ecall
         match regfile[10] {
@@ -319,7 +407,7 @@ pub fn handle_uj_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32) -> Result
             return Err("Instruction address misaligned exception");
         }
         regfile[rd as usize] = *pc + 4;
-        *pc = ((*pc as i32) + (immediate as i32)) as u32;
+        *pc = ((*pc as i32) + immediate) as u32;
     }
     else {
         return Err("Invalid UJ-Type Instruction")

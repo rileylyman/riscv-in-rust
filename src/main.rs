@@ -1,10 +1,10 @@
 use std::fs::File;
 use std::io::prelude::*;
-
+//use std::env::args;
 
 const IMEM_SIZE: usize = 2048;
 const REGFILE_SIZE: usize = 32;
-const MEM_SIZE: usize = 1048576 * 4;
+const MEM_SIZE: usize = 1048576 * 4; // 32 address space in RV32I 
 
 const INSTRUCTIONS: &'static str = "./risc-v/assembled/test.hex";
 
@@ -23,8 +23,9 @@ fn load_into_imem(filepath: &str, imem: &mut [u8]) -> Result<(), &'static str> {
     file.read_to_string(&mut instructions).or_else(|_| return Err("Error reading file")).unwrap();
 
     let mut index = 0;
-    for hex_str in instructions.split(|c: char| !c.is_digit(16)) {
+    for mut hex_str in instructions.split(|c: char| !(c.is_digit(16) || c == 'x')) {
 
+        if let Some("0x") = hex_str.get(0..2) { hex_str = hex_str.get(2..).expect("Op was only 0x?"); }
         let bytes = decode_hex_to_bytes(hex_str).expect("Could not decode instruction to bytes");
 
         match get_bits(bytes[bytes.len() - 1]) {
@@ -55,7 +56,7 @@ fn load_into_imem(filepath: &str, imem: &mut [u8]) -> Result<(), &'static str> {
 fn print_registers(regfile: &mut [u32]) {
     for (i, r) in regfile.into_iter().enumerate() {
         if *r != 0 {
-            println!("x{}: {}", i, *r as i32);
+            println!("x{}: 0x{:08x}", i, *r as i32);
         }
     }
 }
@@ -70,6 +71,8 @@ fn main() {
     
     let mut pc: u32 = 0;
     loop {
+        
+        if imem[pc as usize] == 0x0 { break; }
         
         let bytes = match get_bits(imem[pc as usize]) {
             32 => &imem[(pc as usize)..(pc as usize) + 4],
