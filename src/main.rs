@@ -11,8 +11,23 @@ use implement::*;
 macro_rules! process {
     ($f:expr) => {
         if let Err(e) = $f {
+            print!("Terminated: ");
             match e {
-                _ => {}
+                ExecutionError::Extension(ext) => {
+                    println!("The {} extension was not activated", ext)
+                }
+                ExecutionError::InstructionAddressMisaligned =>{
+                    println!("Instruction address misaligned exception")
+                }
+                ExecutionError::InvalidInstruction(inst) => {
+                    println!("{} is an invalid instruction", inst)
+                }
+                ExecutionError::Unimplemented(inst) => {
+                    println!("The {} instruction is not implemented", inst)
+                }
+                ExecutionError::UserTerminate => {
+                    println!("The user terminated the program")
+                }
             }
             break;
         }
