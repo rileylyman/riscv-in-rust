@@ -287,8 +287,23 @@ pub fn handle_i_type(regfile: &mut [u32], mem: &mut [u8], bytes: &[u8], pc: &mut
             _ => {}
         } 
     }
-    else if opcode == 0x73 && f3 == 0x0 && f7 == 0x1 { //ebreak
-        return Err(ExecutionError::Unimplemented("EBREAK".into()));
+    else if opcode == 0x73 && f3 == 0x1 { //csrrw
+        return Err(ExecutionError::Unimplemented("csrrw".into()));
+    }
+    else if opcode == 0x73 && f3 == 0x2 { //csrrs
+        return Err(ExecutionError::Unimplemented("csrrs".into()));
+    }
+    else if opcode == 0x73 && f3 == 0x3 { //csrrc
+        return Err(ExecutionError::Unimplemented("csrrc".into()));
+    }
+    else if opcode == 0x73 && f3 == 0x4 { //csrrwi
+        return Err(ExecutionError::Unimplemented("csrrwi".into()));
+    }
+    else if opcode == 0x73 && f3 == 0x5 { //csrrsi
+        return Err(ExecutionError::Unimplemented("csrrsi".into()));
+    }
+    else if opcode == 0x73 && f3 == 0x6 { //csrrci
+        return Err(ExecutionError::Unimplemented("csrrci".into()));
     }
     else {
         return Err(ExecutionError::InvalidInstruction(encode_hex(bytes)));
@@ -454,4 +469,23 @@ pub fn handle_uj_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32, _extensio
     }
 
     Ok(())
+}
+
+pub fn handle_fence(_regfile: &mut [u32], bytes: &[u8], _pc: &mut u32) -> Result<(), ExecutionError> {
+    let opcode = get_opcode(bytes);
+    let _rd = get_rd(bytes);
+    let f3 = get_f3(bytes);
+    let _rs1 = get_rs1(bytes);
+
+    //TODO: decode immediate
+
+    if opcode == 0x00FF && f3 == 0x0 {
+        return Err(ExecutionError::Unimplemented("FENCE".into()));
+    }
+    else if opcode == 0x00FF && f3 == 0x1 {
+        return Err(ExecutionError::Unimplemented("FENCE.I".into()));
+    }
+    else {
+        return Err(ExecutionError::InvalidInstruction(encode_hex(bytes)));
+    }
 }

@@ -145,6 +145,11 @@ fn main() {
                     handle_uj_type(&mut regfile, bytes, &mut pc, &extensions)
                 }
             }
+            0xFF => {
+                process! {
+                    handle_fence(&mut regfile, bytes, &mut pc)
+                }
+            }
             _ => {
                 println!("UNRECOGNIZED OPCODE: {}", get_opcode(bytes));
                 println!("{:?}", bytes);
