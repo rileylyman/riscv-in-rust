@@ -11,7 +11,9 @@ use implement::*;
 macro_rules! process {
     ($f:expr) => {
         if let Err(e) = $f {
-            instruction_error(e);
+            match e {
+                _ => {}
+            }
             break;
         }
     }
@@ -29,6 +31,14 @@ pub struct Extensions {
     m: bool,
     a: bool,
     f: bool
+}
+
+pub enum ExecutionError {
+    Extension(String),
+    InvalidInstruction(String),
+    InstructionAddressMisaligned,
+    Unimplemented(String),  
+    UserTerminate
 }
 
 fn load_into_imem(filepath: &str, imem: &mut Vec<u8>) -> Result<(), &'static str> {
@@ -82,10 +92,6 @@ fn get_extensions() -> Extensions {
         else if arg == "-f" || arg == "-G" { f = true; }
     }
     Extensions { m, a, f }
-}
-
-fn instruction_error(e: &'static str) {
-    println!("Error while executing instruction: {}", e);
 }
 
 fn main() {

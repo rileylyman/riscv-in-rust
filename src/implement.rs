@@ -7,7 +7,7 @@ fn mulh(first: u32, second: u32, weight: i64) -> u32 {
     (((first as i64) * (second as i64) * weight) >> 32) as u32
 }
 
-pub fn handle_r_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32, extensions: &Extensions) -> Result<(), &'static str> {
+pub fn handle_r_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32, extensions: &Extensions) -> Result<(), ExecutionError> {
     
     let opcode = get_opcode(bytes);
     let rd     = get_rd(bytes) as usize;
@@ -62,7 +62,7 @@ pub fn handle_r_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32, extensions
             *pc += 4;
         }
         else {
-            return Err("M Extension not in use");
+            return Err(ExecutionError::Extension("M".into()));
         }
     }
     else if opcode == 0x33 && f3 == 0x1 && f7 == 0x1 { //mulh
@@ -84,7 +84,7 @@ pub fn handle_r_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32, extensions
             *pc += 4;
         }
         else {
-            return Err("M Extension not in use");
+            return Err(ExecutionError::Extension("M".into()));
         }
     }
     else if opcode == 0x33 && f3 == 0x2 && f7 == 0x1 { //mulhsu
@@ -102,7 +102,7 @@ pub fn handle_r_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32, extensions
             *pc += 4;
         }
         else {
-            return Err("M Extension not in use");
+            return Err(ExecutionError::Extension("M".into()));
         }
     }
     else if opcode == 0x33 && f3 == 0x3 && f7 == 0x1 { //mulhu
@@ -111,7 +111,7 @@ pub fn handle_r_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32, extensions
             *pc += 4;
         }
         else {
-            return Err("M Extension not in use");
+            return Err(ExecutionError::Extension("M".into()));
         }
     }
     else if opcode == 0x33 && f3 == 0x4 && f7 == 0x1 { //div
@@ -128,7 +128,7 @@ pub fn handle_r_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32, extensions
             *pc += 4;
         }
         else {
-            return Err("M Extension not in use");
+            return Err(ExecutionError::Extension("M".into()));
         }
     }
     else if opcode == 0x33 && f3 == 0x5 && f7 == 0x1 { //divu
@@ -142,7 +142,7 @@ pub fn handle_r_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32, extensions
             *pc += 4;
         }
         else {
-            return Err("M Extension not in use");
+            return Err(ExecutionError::Extension("M".into()));;
         }
     }
     else if opcode == 0x33 && f3 == 0x6 && f7 == 0x1 { //rem
@@ -159,7 +159,7 @@ pub fn handle_r_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32, extensions
             *pc += 4;
         }
         else {
-            return Err("M Extension not in use");
+            return Err(ExecutionError::Extension("M".into()));
         }
     }
     else if opcode == 0x33 && f3 == 0x7 && f7 == 0x1 { //remu
@@ -173,17 +173,17 @@ pub fn handle_r_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32, extensions
             *pc += 4;
         }
         else {
-            return Err("M Extension not in use");
+            return Err(ExecutionError::Extension("M".into()));
         }
     }
     else {
-        return Err("Invalid R-Type Instruction");
+        return Err(ExecutionError::InvalidInstruction(encode_hex(bytes)));
     }
     
     Ok(())
 }
 
-pub fn handle_i_type(regfile: &mut [u32], mem: &mut [u8], bytes: &[u8], pc: &mut u32, _extensions: &Extensions) -> Result<(), &'static str> {
+pub fn handle_i_type(regfile: &mut [u32], mem: &mut [u8], bytes: &[u8], pc: &mut u32, _extensions: &Extensions) -> Result<(), ExecutionError> {
 
     let opcode = get_opcode(bytes);
     let rd     = get_rd(bytes) as usize;
@@ -270,7 +270,7 @@ pub fn handle_i_type(regfile: &mut [u32], mem: &mut [u8], bytes: &[u8], pc: &mut
     else if opcode == 0x67 && f3 == 0x0 { // jalr
         let destination = ((regfile[rs1] as i32) + immediate) & 0xFF_FF_FF_FE;
         if destination % INSTRUCTION_ADDRESS_MISALIGNED_THRESHOLD != 0 {
-            return Err("Instruction address misaligned exception");
+            return Err(ExecutionError::InstructionAddressMisaligned);
         }
         regfile[rd] = *pc + 4;
         *pc = destination as u32;
@@ -282,22 +282,22 @@ pub fn handle_i_type(regfile: &mut [u32], mem: &mut [u8], bytes: &[u8], pc: &mut
             }
             0xA => {
                 println!("TERMINATE ECALL");
-                return Err("Program terminated");
+                return Err(ExecutionError::UserTerminate);
             }
             _ => {}
         } 
     }
     else if opcode == 0x73 && f3 == 0x0 && f7 == 0x1 { //ebreak
-        return Err("ebreak: unimplemented instruction");
+        return Err(ExecutionError::Unimplemented("EBREAK".into()));
     }
     else {
-        return Err("Invalid I-Type Instruction");
+        return Err(ExecutionError::InvalidInstruction(encode_hex(bytes)));
     }
 
     Ok(())
 }
 
-pub fn handle_s_type(regfile: &mut [u32], mem: &mut [u8], bytes: &[u8], pc: &mut u32, _extensions: &Extensions) -> Result<(), &'static str> {
+pub fn handle_s_type(regfile: &mut [u32], mem: &mut [u8], bytes: &[u8], pc: &mut u32, _ext: &Extensions) -> Result<(), ExecutionError> {
     
     let opcode   = get_opcode(bytes);
     let f3       = get_f3(bytes);
@@ -334,13 +334,13 @@ pub fn handle_s_type(regfile: &mut [u32], mem: &mut [u8], bytes: &[u8], pc: &mut
         *pc += 4;
     }
     else { 
-        return Err("Invalid S-Type Instruction");
+        return Err(ExecutionError::InvalidInstruction(encode_hex(bytes)));
     }
 
     Ok(())
 }
 
-pub fn handle_sb_type(regfile: &mut[u32], bytes: &[u8], pc: &mut u32, _extensions: &Extensions) -> Result<(), &'static str> {
+pub fn handle_sb_type(regfile: &mut[u32], bytes: &[u8], pc: &mut u32, _extensions: &Extensions) -> Result<(), ExecutionError> {
     let opcode          = get_opcode(bytes);
     let f3              = get_f3(bytes);
     let rs1             = get_rs1(bytes) as usize;
@@ -351,7 +351,7 @@ pub fn handle_sb_type(regfile: &mut[u32], bytes: &[u8], pc: &mut u32, _extension
     if opcode == 0x63 && f3 == 0x0 { // beq
         if regfile[rs1 as usize] == regfile[rs2 as usize] {
             if immediate % INSTRUCTION_ADDRESS_MISALIGNED_THRESHOLD != 0 {
-                return Err("Instruction address misaligned exception");
+                return Err(ExecutionError::InstructionAddressMisaligned);
             }
             *pc = ((*pc as i32) + immediate) as u32;
         } else {
@@ -361,7 +361,7 @@ pub fn handle_sb_type(regfile: &mut[u32], bytes: &[u8], pc: &mut u32, _extension
     else if opcode == 0x63 && f3 == 0x1 { // bne
         if regfile[rs1 as usize] != regfile[rs2 as usize] {
             if immediate % INSTRUCTION_ADDRESS_MISALIGNED_THRESHOLD != 0 {
-                return Err("Instruction address misaligned exception");
+                return Err(ExecutionError::InstructionAddressMisaligned);
             }
             *pc = ((*pc as i32) + immediate) as u32;
         } else {
@@ -371,7 +371,7 @@ pub fn handle_sb_type(regfile: &mut[u32], bytes: &[u8], pc: &mut u32, _extension
     else if opcode == 0x63 && f3 == 0x4 { // blt
         if (regfile[rs1 as usize] as i32) < (regfile[rs2 as usize] as i32) {
             if immediate % INSTRUCTION_ADDRESS_MISALIGNED_THRESHOLD != 0 {
-                return Err("Instruction address misaligned exception");
+                return Err(ExecutionError::InstructionAddressMisaligned);
             }
             *pc = ((*pc as i32) + immediate) as u32;
         } else {
@@ -381,7 +381,7 @@ pub fn handle_sb_type(regfile: &mut[u32], bytes: &[u8], pc: &mut u32, _extension
     else if opcode == 0x63 && f3 == 0x5 { // bge
         if (regfile[rs1 as usize] as i32) < (regfile[rs2 as usize] as i32) {
             if immediate % INSTRUCTION_ADDRESS_MISALIGNED_THRESHOLD != 0 {
-                return Err("Instruction address misaligned exception");
+                return Err(ExecutionError::InstructionAddressMisaligned);
             }
             *pc = ((*pc as i32) + immediate) as u32;
         } else {
@@ -391,7 +391,7 @@ pub fn handle_sb_type(regfile: &mut[u32], bytes: &[u8], pc: &mut u32, _extension
     else if opcode == 0x63 && f3 == 0x6 { //bltu 
         if regfile[rs1 as usize] < regfile[rs2 as usize] {
             if immediate % INSTRUCTION_ADDRESS_MISALIGNED_THRESHOLD != 0 {
-                return Err("Instruction address misaligned exception");
+                return Err(ExecutionError::InstructionAddressMisaligned);
             }
             *pc = ((*pc as i32) + immediate) as u32;
         } else {
@@ -401,7 +401,7 @@ pub fn handle_sb_type(regfile: &mut[u32], bytes: &[u8], pc: &mut u32, _extension
     else if opcode == 0x63 && f3 == 0x7 { //bgeu
         if regfile[rs1 as usize] >= regfile[rs2 as usize] {
             if immediate % INSTRUCTION_ADDRESS_MISALIGNED_THRESHOLD != 0 {
-                return Err("Instruction address misaligned exception");
+                return Err(ExecutionError::InstructionAddressMisaligned);
             }
             *pc = ((*pc as i32) + immediate) as u32;
         } else {
@@ -409,13 +409,13 @@ pub fn handle_sb_type(regfile: &mut[u32], bytes: &[u8], pc: &mut u32, _extension
         }
     }
     else {
-        return Err("Invalid SB-Type Instruction");
+        return Err(ExecutionError::InvalidInstruction(encode_hex(bytes)));
     }
 
     Ok(())
 }
 
-pub fn handle_u_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32, _extensions: &Extensions) -> Result<(), &'static str> {
+pub fn handle_u_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32, _extensions: &Extensions) -> Result<(), ExecutionError> {
     let opcode = get_opcode(bytes);
     let rd     = get_rd(bytes);
 
@@ -430,13 +430,13 @@ pub fn handle_u_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32, _extension
         *pc += 4;
     }
     else { 
-        return Err("Invalid U-Type Instruction");
+        return Err(ExecutionError::InvalidInstruction(encode_hex(bytes)));
     }
 
     Ok(())
 }
 
-pub fn handle_uj_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32, _extensions: &Extensions) -> Result<(), &'static str> {
+pub fn handle_uj_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32, _extensions: &Extensions) -> Result<(), ExecutionError> {
     let opcode = get_opcode(bytes);
     let rd     = get_rd(bytes);
 
@@ -444,13 +444,13 @@ pub fn handle_uj_type(regfile: &mut [u32], bytes: &[u8], pc: &mut u32, _extensio
 
     if opcode == 0x6F { //jal 
         if immediate % INSTRUCTION_ADDRESS_MISALIGNED_THRESHOLD != 0 {
-            return Err("Instruction address misaligned exception");
+            return Err(ExecutionError::InstructionAddressMisaligned);
         }
         regfile[rd as usize] = *pc + 4;
         *pc = ((*pc as i32) + immediate) as u32;
     }
     else {
-        return Err("Invalid UJ-Type Instruction")
+        return Err(ExecutionError::InvalidInstruction(encode_hex(bytes)));
     }
 
     Ok(())

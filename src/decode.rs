@@ -1,6 +1,7 @@
 #![allow(overflowing_literals)]
 
 use std::num::ParseIntError;
+use std::fmt::Write;
 
 // Decode an even length hex string into its constituent bytes
 // Code adapted from StackOverflow user `Sven Marnach`
@@ -11,6 +12,14 @@ pub fn decode_hex_to_bytes(hex: &str) -> Result<Vec<u8>, ParseIntError> {
         }
     ).collect()
 }
+
+pub fn encode_hex(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for &b in bytes {
+        write!(&mut s, "{:02x}", b).expect("Error writing bytes into hex string.");
+    }
+    s
+} 
 
 pub fn get_opcode(bytes: &[u8]) -> u8 { (bytes[0] << 1) >> 1 }
 
