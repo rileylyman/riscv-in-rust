@@ -69,8 +69,8 @@ fn load_into_imem(filepath: &str, imem: &mut Vec<u8>) -> Result<(), &'static str
         let bytes = decode_hex_to_bytes(hex_str).expect("Could not decode instruction to bytes");
 
         match get_bits(bytes[bytes.len() - 1]) {
-            16 => { return Err("16-bit instructions not supported"); } // 16 bit instruction
-            32 => { // 32 bit instruction
+            16 if bytes.len() == 2 => { return Err("16-bit instructions not supported"); } // 16 bit instruction
+            32 if bytes.len() == 4 => { // 32 bit instruction
 
                 if bytes.len() == 4 {
                     imem.push(bytes[3]);
@@ -81,9 +81,9 @@ fn load_into_imem(filepath: &str, imem: &mut Vec<u8>) -> Result<(), &'static str
                 else { return Err("32-bit instruction does not contain 4 bytes, but more or less"); }
 
             } 
-            48 => { return Err("48-bit instructions not supported"); } // 48 bit instruction
-            64 => { return Err("64-bit instructions not supported"); } // 64 bit instruction
-            _  => { return Err(">=80-bit instructions not supported"); } // >= 80 bit instruction
+            48 if bytes.len() == 6 => { return Err("48-bit instructions not supported"); } // 48 bit instruction
+            64 if bytes.len() == 8 => { return Err("64-bit instructions not supported"); } // 64 bit instruction
+            _  => { return Err(">=80-bit instructions not supported, or incorrect no. of bytes encoded"); } // >= 80 bit instruction
         }
 
     }
@@ -99,7 +99,7 @@ fn print_registers(regfile: &mut [u32]) {
     }
 }
 
-fn get_extensions() -> Extensions {
+fn get_extensions() -> Box<Extensions> {
     let mut a = false;
     let mut m = false;
     let mut f = false;
@@ -108,7 +108,26 @@ fn get_extensions() -> Extensions {
         else if arg == "-m" || arg == "-G" { m = true; }
         else if arg == "-f" || arg == "-G" { f = true; }
     }
-    Extensions { m, a, f }
+    Box::new(Extensions { m, a, f })
+}
+
+fn fetch_inst(pc: u32, imem: &[u8]) -> Result<&[u8], String> {
+    
+    if (pc as usize + 4) > imem.len() { return Err("End of imem".into()); }
+
+    match get_bits(imem[pc as usize]) {
+        32 => {
+            let bytes = &imem[(pc as usize)..(pc as usize) + 4];
+            if encode_hex(bytes) == "00000000".to_string() || encode_hex(bytes) == "11111111".to_string() {
+                Err(format!("The instruction 0x{} is illegal", encode_hex(bytes)))
+            }
+            else { Ok(bytes) }
+        }
+        _ => {
+            Err("Only 32 bit instructions are supported".into())
+        }
+    }
+    
 }
 
 fn main() {
@@ -116,20 +135,15 @@ fn main() {
     let extensions = get_extensions();
 
     let mut imem: Vec<u8> = Vec::new();
-    let mut regfile: [u32; REGFILE_SIZE] = [0; REGFILE_SIZE];
-    let mut mem: [u8; MEM_SIZE] = [0; MEM_SIZE];
+    let mut regfile: Vec<u32> = vec![0; REGFILE_SIZE];
+    let mut mem: Vec<u8> = vec![0; MEM_SIZE];
 
     load_into_imem(INSTRUCTIONS, &mut imem).unwrap();
     
     let mut pc: u32 = 0;
     loop {
         
-        if (pc as usize + 4) >= imem.len() { break; }
-
-        let bytes = match get_bits(imem[pc as usize]) {
-            32 => &imem[(pc as usize)..(pc as usize) + 4],
-            _ => panic!("Only 32 bit instructions are supported")
-        };
+        let bytes = match fetch_inst(pc, &imem) { Ok(b) => b, _ => break };
 
         match get_opcode(bytes) {
             0x3 | 0x13 | 0x1B | 0x67 | 0x73 => { 
