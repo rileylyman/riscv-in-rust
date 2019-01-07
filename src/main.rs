@@ -63,6 +63,8 @@ fn load_into_imem(filepath: &str, imem: &mut Vec<u8>) -> Result<(), &'static str
 
     for mut hex_str in instructions.split(|c: char| !(c.is_digit(16) || c == 'x')) {
 
+        if hex_str.is_empty() { continue; }
+
         if let Some("0x") = hex_str.get(0..2) { hex_str = hex_str.get(2..).expect("Op was only 0x?"); }
         let bytes = decode_hex_to_bytes(hex_str).expect("Could not decode instruction to bytes");
 
