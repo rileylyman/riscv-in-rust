@@ -10,6 +10,9 @@ pub mod ujtype;
 pub mod utype;
 pub mod sbtype;
 
+#[cfg(test)]
+mod implementer_test;
+
 pub fn handle_fence(_regfile: &mut [u32], bytes: &[u8], _pc: &mut u32) -> Result<(), ExecutionError> {
     let opcode = get_opcode(bytes);
     let _rd = get_rd(bytes);
