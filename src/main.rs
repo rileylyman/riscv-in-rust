@@ -1,12 +1,13 @@
-use std::fs::File;
-use std::io::prelude::*;
 use std::env::args;
 
-mod decode;
-use decode::*;
+mod decoder;
+use decoder::*;
 
-mod implement;
-use implement::*;
+mod implementer;
+use implementer::{*, rtype::*, itype::*, utype::*, stype::*, ujtype::*, sbtype::*};
+
+mod assembler;
+use assembler::*;
 
 macro_rules! process {
     ($f:expr) => {
@@ -37,8 +38,6 @@ macro_rules! process {
 const REGFILE_SIZE: usize = 32;
 const MEM_SIZE: usize = 1048576 * 4; // 32 address space in RV32I 
 
-const INSTRUCTIONS: &'static str = "./risc-v/assembled/test.hex";
-
 const INSTRUCTION_ADDRESS_MISALIGNED_THRESHOLD: i32 = 4;
 
 #[allow(dead_code)]
@@ -54,41 +53,6 @@ pub enum ExecutionError {
     InstructionAddressMisaligned,
     Unimplemented(String),  
     UserTerminate
-}
-
-fn load_into_imem(filepath: &str, imem: &mut Vec<u8>) -> Result<(), &'static str> {
-    let mut file = File::open(filepath).or_else(|_| return Err("Could not open instruction file")).unwrap();
-    let mut instructions = String::new();
-    file.read_to_string(&mut instructions).or_else(|_| return Err("Error reading file")).unwrap();
-
-    for mut hex_str in instructions.split(|c: char| !(c.is_digit(16) || c == 'x')) {
-
-        if hex_str.is_empty() { continue; }
-
-        if let Some("0x") = hex_str.get(0..2) { hex_str = hex_str.get(2..).expect("Op was only 0x?"); }
-        let bytes = decode_hex_to_bytes(hex_str).expect("Could not decode instruction to bytes");
-
-        match get_bits(bytes[bytes.len() - 1]) {
-            16 if bytes.len() == 2 => { return Err("16-bit instructions not supported"); } // 16 bit instruction
-            32 if bytes.len() == 4 => { // 32 bit instruction
-
-                if bytes.len() == 4 {
-                    imem.push(bytes[3]);
-                    imem.push(bytes[2]);
-                    imem.push(bytes[1]);
-                    imem.push(bytes[0]);
-                }
-                else { return Err("32-bit instruction does not contain 4 bytes, but more or less"); }
-
-            } 
-            48 if bytes.len() == 6 => { return Err("48-bit instructions not supported"); } // 48 bit instruction
-            64 if bytes.len() == 8 => { return Err("64-bit instructions not supported"); } // 64 bit instruction
-            _  => { return Err(">=80-bit instructions not supported, or incorrect no. of bytes encoded"); } // >= 80 bit instruction
-        }
-
-    }
-    
-    Ok(())
 }
 
 fn print_registers(regfile: &mut [u32]) {
@@ -109,6 +73,15 @@ fn get_extensions() -> Box<Extensions> {
         else if arg == "-f" || arg == "-G" { f = true; }
     }
     Box::new(Extensions { m, a, f })
+}
+
+fn get_filepath() -> Result<String, ()> {
+    for arg in args() {
+        if arg.get(0..5).unwrap_or("") == "-src=" {
+            return Ok(arg.get(5..).unwrap_or("./risc-v/sources/test.S").into());
+        }
+    }
+    Err(())
 }
 
 fn fetch_inst(pc: u32, imem: &[u8]) -> Result<&[u8], String> {
@@ -132,13 +105,14 @@ fn fetch_inst(pc: u32, imem: &[u8]) -> Result<&[u8], String> {
 
 fn main() {
     
-    let extensions = get_extensions();
-
     let mut imem: Vec<u8> = Vec::new();
     let mut regfile: Vec<u32> = vec![0; REGFILE_SIZE];
     let mut mem: Vec<u8> = vec![0; MEM_SIZE];
 
-    load_into_imem(INSTRUCTIONS, &mut imem).unwrap();
+    let extensions   = get_extensions();
+    let src_filepath = get_filepath().expect("Source Risc-V file not specified.");
+
+    assemble_and_load(src_filepath, &mem, &imem);
     
     let mut pc: u32 = 0;
     loop {

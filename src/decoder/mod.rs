@@ -2,10 +2,13 @@
 
 use std::num::ParseIntError;
 use std::fmt::Write;
+use std::fs::File;
+use std::io::prelude::*;
+
 
 // Decode an even length hex string into its constituent bytes
 // Code adapted from StackOverflow user `Sven Marnach`
-pub fn decode_hex_to_bytes(hex: &str) -> Result<Vec<u8>, ParseIntError> {
+fn decode_hex_to_bytes(hex: &str) -> Result<Vec<u8>, ParseIntError> {
     (0..hex.len()).step_by(2).map(
         |k| {
             u8::from_str_radix(&hex[k..k + 2], 16)
@@ -73,6 +76,42 @@ pub fn decode_i_type_immediate(bytes: &[u8]) -> i32 {
     (((bytes[3] as u32) << 4) + ((bytes[2] >> 4) as u32) +
         if bytes[3] >> 7 == 0x1 { 0xFF_FF_F0_00 } else { 0x0 }) as i32
 }
+
+pub fn load_into_imem(filepath: &str, imem: &mut Vec<u8>) -> Result<(), &'static str> {
+    let mut file = File::open(filepath).or_else(|_| return Err("Could not open instruction file")).unwrap();
+    let mut instructions = String::new();
+    file.read_to_string(&mut instructions).or_else(|_| return Err("Error reading file")).unwrap();
+
+    for mut hex_str in instructions.split(|c: char| !(c.is_digit(16) || c == 'x')) {
+
+        if hex_str.is_empty() { continue; }
+
+        if let Some("0x") = hex_str.get(0..2) { hex_str = hex_str.get(2..).expect("Op was only 0x?"); }
+        let bytes = decode_hex_to_bytes(hex_str).expect("Could not decode instruction to bytes");
+
+        match get_bits(bytes[bytes.len() - 1]) {
+            16 if bytes.len() == 2 => { return Err("16-bit instructions not supported"); } // 16 bit instruction
+            32 if bytes.len() == 4 => { // 32 bit instruction
+
+                if bytes.len() == 4 {
+                    imem.push(bytes[3]);
+                    imem.push(bytes[2]);
+                    imem.push(bytes[1]);
+                    imem.push(bytes[0]);
+                }
+                else { return Err("32-bit instruction does not contain 4 bytes, but more or less"); }
+
+            } 
+            48 if bytes.len() == 6 => { return Err("48-bit instructions not supported"); } // 48 bit instruction
+            64 if bytes.len() == 8 => { return Err("64-bit instructions not supported"); } // 64 bit instruction
+            _  => { return Err(">=80-bit instructions not supported, or incorrect no. of bytes encoded"); } // >= 80 bit instruction
+        }
+
+    }
+    
+    Ok(())
+}
+
 
 #[allow(unused_imports)]
 mod test {
