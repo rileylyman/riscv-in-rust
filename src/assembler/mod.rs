@@ -1,4 +1,4 @@
 
-pub fn assemble_and_load(filepath: String, mem: &[u8], imem: &[u8]) -> () {
+pub fn assemble_and_load(filepath: &str, mem: &mut [u8], imem: &mut [u8]) -> () {
 
 }
